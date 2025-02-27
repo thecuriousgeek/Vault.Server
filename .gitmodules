@@ -1,3 +1,6 @@
 [submodule "Python/LibPython"]
 	path = Python/LibPython
 	url = https://github.com/thecuriousgeek/LibPython
+[submodule "LibPython"]
+	path = LibPython
+	url = https://github.com/TheCuriousGeek/LibPython
