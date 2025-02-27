@@ -13,7 +13,7 @@ Logger.SetPrefix('Vault')
 
 def Watcher():
   _Logger = Logger('Watcher')
-  _IniFile = IniFile(f'{Vault.Folder}/Vault.ini')
+  _IniFile = IniFile(f'{Vault.Root}/Vault.ini')
   s = _IniFile.Get('Setting','Timeout')
   _Timeout = int(s) if s else 600
   _Logger.Info(f'Will close vaults after {_Timeout} seconds idle')
@@ -26,7 +26,7 @@ def Watcher():
         _Vault.Unmount()
 
 # Crypt.Test()
-Vault.Folder = sys.argv[1] if len(sys.argv)>1 and os.path.isdir(sys.argv[1]) else './data'
+Vault.Root = sys.argv[1] if len(sys.argv)>1 and os.path.isdir(sys.argv[1]) else './data'
 Vault.Load()
 threading.Thread(target=lambda: Watcher()).start()
 WebDav().Start(False)

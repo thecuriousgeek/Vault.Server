@@ -85,7 +85,7 @@ class WebDav(AsyncTask):
       if not _Header: return Response(None,401,{'WWW-Authenticate':'Basic'})
       _Auth = base64.b64decode(_Header.split()[-1]).decode('utf-8').split(':',1)
       if Vault.Get(_Auth[0]): return Response('Vault already exists',401,{'WWW-Authenticate':'Basic realm="New Vault"'})
-      _Folder = f'{Vault.Folder}/{_Auth[0]}'
+      _Folder = f'{Vault.Root}/{_Auth[0]}'
       if os.path.exists(_Folder): return Response('Folder with same name exists',401,{'WWW-Authenticate':'Basic'})
       os.makedirs(_Folder,exist_ok=True)
       import Crypt

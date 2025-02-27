@@ -7,28 +7,28 @@ from LibPython import IniFile, Logger
 import Crypt
 
 class Vault:
-  Folder=None
+  Root=None
   Instances:list[Self]=[]
   def Get(pName:str)->Self: return next((x for x in Vault.Instances if x.Name==pName),None)
 
   def __init__(self,pName:str,pFolder:str):
     self.Name=pName
-    self.Folder=pFolder
+    self.Root=self.Root+'/'+pFolder
     self.CryptoData = None
     self.CryptoName = None
     self.Mounted = False
     self.LastUse = datetime.min
     self.Logger = Logger(f'Vault.{self.Name}')
-    if not os.path.isfile(f'{self.Folder}/.vault'): raise Exception(f'Cannot open vault {self.Name}')
+    if not os.path.isfile(f'{self.Root}/.vault'): raise Exception(f'Cannot open vault {self.Name}')
     Vault.Instances.append(self)
     self.Log('Configured')
     
   def Log(self,pWhat): self.Logger.Info(pWhat)
   
   def Validate(self,pPassword:str)->bool:
-    if not os.path.isfile(f'{self.Folder}/.vault'): return False
+    if not os.path.isfile(f'{self.Root}/.vault'): return False
     if pPassword is None: return False
-    _VaultHash = open(f'{self.Folder}/.vault').readline()
+    _VaultHash = open(f'{self.Root}/.vault').readline()
     _InputHash = Crypt.Hash.Get(pPassword)
     return _VaultHash.upper()==_InputHash.upper()
 
@@ -57,10 +57,10 @@ class Vault:
     return '/'+'/'.join(_Result)
     
   def GetFileName(self,pPath:str)->str:
-    return (self.Folder+self.EncryptPath(pPath)).replace('\\','/')
+    return (self.Root+self.EncryptPath(pPath)).replace('\\','/')
   
   def GetPath(self,pFileName:str)->str:
-    return self.DecryptPath(pFileName[len(self.Folder):]).replace('\\','/')
+    return self.DecryptPath(pFileName[len(self.Root):]).replace('\\','/')
   
   def IsHidden(self,pPath:str)->bool:
     return pPath=='/.vault'
@@ -131,15 +131,15 @@ class Vault:
 #region Static Methods
   def Load():
     _Logger = Logger('Load')
-    _Logger.Info(f'Loading vaults from {Vault.Folder}/Vault.ini')
-    _IniFile = IniFile(f'{Vault.Folder}/Vault.ini')
+    _Logger.Info(f'Loading vaults from {Vault.Root}/Vault.ini')
+    _IniFile = IniFile(f'{Vault.Root}/Vault.ini')
     for _Name in _IniFile.GetKeys('Vault'):
       _Vault = Vault(_Name,_IniFile.Get('Vault',_Name))
 
   def Save():
-    _IniFile = IniFile(f'{Vault.Folder}/Vault.ini')
+    _IniFile = IniFile(f'{Vault.Root}/Vault.ini')
     for _Vault in Vault.Instances:
-      _IniFile.Add('Vault',_Vault.Name,_Vault.Folder)
+      _IniFile.Add('Vault',_Vault.Name,_Vault.Root)
     _IniFile.Save()
     
   def Create():

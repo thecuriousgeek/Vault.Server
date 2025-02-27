@@ -7,4 +7,4 @@ ADD LibPython /src/LibPython
 WORKDIR /src
 EXPOSE 80
 VOLUME ["/data"]
-CMD python Program.py
+CMD python Program.py /Vault
