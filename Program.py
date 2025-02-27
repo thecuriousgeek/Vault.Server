@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 import threading
@@ -7,11 +8,12 @@ from LibPython import IniFile, Logger
 from WebDav import WebDav
 from Vault import Vault
 
-logging.getLogger("Vault").setLevel(logging.INFO)
+Logger.SetLevel(logging.INFO)
+Logger.SetPrefix('Vault')
 
 def Watcher():
   _Logger = Logger('Watcher')
-  _IniFile = IniFile('./Vault.ini')
+  _IniFile = IniFile(f'{Vault.Folder}/Vault.ini')
   s = _IniFile.Get('Setting','Timeout')
   _Timeout = int(s) if s else 600
   _Logger.Info(f'Will close vaults after {_Timeout} seconds idle')
@@ -24,10 +26,7 @@ def Watcher():
         _Vault.Unmount()
 
 # Crypt.Test()
+Vault.Folder = sys.argv[1] if len(sys.argv)>1 and os.path.isdir(sys.argv[1]) else './data'
 Vault.Load()
-if len(sys.argv)>1 and sys.argv[1].lower()=='new':
-  Vault.Create()
-  sys.exit(0)
-
 threading.Thread(target=lambda: Watcher()).start()
 WebDav().Start(False)

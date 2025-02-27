@@ -7,6 +7,7 @@ from LibPython import IniFile, Logger
 import Crypt
 
 class Vault:
+  Folder=None
   Instances:list[Self]=[]
   def Get(pName:str)->Self: return next((x for x in Vault.Instances if x.Name==pName),None)
 
@@ -129,12 +130,14 @@ class Vault:
     
 #region Static Methods
   def Load():
-    _IniFile = IniFile('./Vault.ini')
+    _Logger = Logger('Load')
+    _Logger.Info(f'Loading vaults from {Vault.Folder}/Vault.ini')
+    _IniFile = IniFile(f'{Vault.Folder}/Vault.ini')
     for _Name in _IniFile.GetKeys('Vault'):
       _Vault = Vault(_Name,_IniFile.Get('Vault',_Name))
 
   def Save():
-    _IniFile = IniFile('./Vault.ini')
+    _IniFile = IniFile(f'{Vault.Folder}/Vault.ini')
     for _Vault in Vault.Instances:
       _IniFile.Add('Vault',_Vault.Name,_Vault.Folder)
     _IniFile.Save()

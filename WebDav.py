@@ -51,7 +51,7 @@ class WebDav(AsyncTask):
     # log.setLevel(logging.ERROR)
     self.App = Flask(__name__)
     self.App.secret_key = "MyVault"
-    self.Port = 5000
+    self.Port = 80
     self.Logger = Logger('WebDAV.Vault')    
     self.App.add_url_rule('/','Admin',WebDav.OnAdmin,methods=['GET'])
     self.App.add_url_rule('/<string:pVault>','Home',WebDav.OnAdmin,methods=['GET'])
@@ -78,8 +78,22 @@ class WebDav(AsyncTask):
       _Response = '<html><head><title>My Vaults</title></head><body><h2>The following vaults are configured</h2><ul>'
       for _Vault in Vault.Instances:
         _Response += f'<li><a href="/{_Vault.Name}">{_Vault.Name}</a> - is {"Open" if _Vault.Mounted else "Closed"}</li>'
-      _Response += '</ul></body></html>'
+      _Response += f'</ul><p><a href="/_">Create New</a></body></html>'
       return Response(_Response,200)
+    elif pVault=='_':
+      _Header = request.headers.get('Authorization')
+      if not _Header: return Response(None,401,{'WWW-Authenticate':'Basic'})
+      _Auth = base64.b64decode(_Header.split()[-1]).decode('utf-8').split(':',1)
+      if Vault.Get(_Auth[0]): return Response('Vault already exists',401,{'WWW-Authenticate':'Basic realm="New Vault"'})
+      _Folder = f'{Vault.Folder}/{_Auth[0]}'
+      if os.path.exists(_Folder): return Response('Folder with same name exists',401,{'WWW-Authenticate':'Basic'})
+      os.makedirs(_Folder,exist_ok=True)
+      import Crypt
+      with open(f'{_Folder}/.vault','w') as _Signature:
+        _Signature.write(Crypt.Hash.Get(_Auth[1]))
+      _Vault = Vault(_Auth[0],_Folder)
+      Vault.Save()
+      return redirect('/')
     else:
       _Context = WebDav.Context(request)
       if _Context.Vault is None: return Response('No such vault',404)
