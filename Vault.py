@@ -29,7 +29,7 @@ class Vault:
     if not os.path.isfile(f'{self.Root}/.vault'): return False
     if pPassword is None: return False
     _VaultHash = open(f'{self.Root}/.vault').readline()
-    _InputHash = Crypt.Hash.Get(pPassword)
+    _InputHash = Crypt.AES(pPassword).Encrypt('vault')
     return _VaultHash.upper()==_InputHash.upper()
 
   def Mount(self,pPassword:str):
@@ -169,7 +169,7 @@ class Vault:
     if not _Password: print(f'**Warning** Vault {_Name} will be unencrypted')
     if not os.path.isfile(f'{_Folder}/.vault'):
       with open(f'{_Folder}/.vault','w') as _Signature:
-        _Signature.write(Crypt.Hash.Get(_Password))
+        _Signature.write(Crypt.AES(_Password).Encrypt('vault'))
     _Vault = Vault(_Name,_Folder)
     if not _Vault.Validate(_Password):
       print('Could not validate vault')

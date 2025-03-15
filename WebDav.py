@@ -90,7 +90,7 @@ class WebDav(AsyncTask):
       os.makedirs(_Folder,exist_ok=True)
       import Crypt
       with open(f'{_Folder}/.vault','w') as _Signature:
-        _Signature.write(Crypt.Hash.Get(_Auth[1]))
+        _Signature.write(Crypt.AES(_Auth[1]).Encrypt('vault'))
       _Vault = Vault(_Auth[0],_Folder)
       Vault.Save()
       return redirect('/')

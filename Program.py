@@ -26,7 +26,8 @@ def Watcher():
         _Vault.Unmount()
 
 # Crypt.Test()
-Vault.Root = sys.argv[1] if len(sys.argv)>1 and os.path.isdir(sys.argv[1]) else './data'
+Vault.Root = sys.argv[1] if len(sys.argv)>1 and os.path.isdir(sys.argv[1]) else '.'
+os.chdir(Vault.Root)
 Vault.Load()
 threading.Thread(target=lambda: Watcher()).start()
 WebDav().Start(False)
