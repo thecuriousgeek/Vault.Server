@@ -1,33 +1,17 @@
 import os
 import sys
 import logging
-import threading
-from datetime import datetime
-import time
-from LibPython import IniFile, Logger
+from LibPython import Logger
 from WebDav import WebDav
-from Vault import Vault
+from Vault import Vault,Config
 
 Logger.SetLevel(logging.INFO)
 Logger.SetPrefix('Vault')
 
-def Watcher():
-  _Logger = Logger('Watcher')
-  _IniFile = IniFile(f'{Vault.Root}/Vault.ini')
-  s = _IniFile.Get('Setting','Timeout')
-  _Timeout = int(s) if s else 600
-  _Logger.Info(f'Will close vaults after {_Timeout} seconds idle')
-  while True:
-    time.sleep(5)
-    _Now = datetime.now()
-    for _Vault in Vault.Instances:
-      if _Vault.Mounted and (_Now-_Vault.LastUse).total_seconds()>_Timeout: 
-        _Logger.Warning(f'Closing {_Vault.Name} after {_Timeout} seconds idle')
-        _Vault.Unmount()
 
 # Crypt.Test()
-Vault.Root = sys.argv[1] if len(sys.argv)>1 and os.path.isdir(sys.argv[1]) else '.'
+if len(sys.argv) > 1 and os.path.isdir(sys.argv[1]):
+  Vault.Root = sys.argv[1]
 os.chdir(Vault.Root)
-Vault.Load()
-threading.Thread(target=lambda: Watcher()).start()
+Config.Load()
 WebDav().Start(False)

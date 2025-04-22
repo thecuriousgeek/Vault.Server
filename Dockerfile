@@ -5,5 +5,5 @@ COPY . /src
 WORKDIR /src
 RUN pip3 install -r ./requirements.txt
 EXPOSE 80
-VOLUME ["/data"]
+VOLUME ["/Vault"]
 CMD python Program.py /Vault
