@@ -1,10 +1,11 @@
 import os
 import pathlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 import re
 import urllib.parse
-import base64
-from flask import Flask, Request, Response, request, redirect
+import threading
+import socket
+from flask import Flask, Request, Response, request, redirect,send_file
 import mimetypes
 from Vault import Vault, Config
 from LibPython import Logger, AsyncTask, Dynamic
@@ -48,10 +49,17 @@ def AfterRequest(pResponse):
 class WebDav(AsyncTask):
   Locks = []
   async def Run(self):
-    if not os.path.exists(f'vault.key'):
-      WebDav.GenerateCerts()
-    self.Logger.Info(f'Starting on {self.Port}')
-    self.App.run(host='0.0.0.0', port=self.Port,ssl_context=('./vault.crt', './vault.key'))
+    _Name = socket.gethostname()
+    if not os.path.exists(f'{_Name}.key') or not os.path.exists(f'{_Name}.crt'):
+      _Names = [socket.gethostname(),socket.getfqdn()]
+      c,k = WebDav.GenerateCerts(_Names)
+      with open(f'{_Name}.crt', "wt") as f:
+        f.write(c.decode('utf-8'))
+      with open(f'{_Name}.key', "wt") as f:
+        f.write(k.decode('utf-8'))
+    threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':443,'ssl_context': (f'{_Name}.crt', f'{_Name}.key')}).start()
+    threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':80}).start()
+    # self.App.run(host='0.0.0.0', port=self.Port,ssl_context=(f'{_Name}.crt', f'{_Name}.key'))
 
   def __init__(self):
     super().__init__('WebDav')
@@ -59,11 +67,11 @@ class WebDav(AsyncTask):
     # log.setLevel(logging.ERROR)
     self.App = App  # Global instance
     self.App.secret_key = "MyVault"
-    self.Port = 443
     self.Logger = Logger('WebDAV.Vault')
     self.App.add_url_rule('/admin', 'AdminHome',WebDav.OnAdminHome, methods=['GET'])
     self.App.add_url_rule('/admin/new', 'AdminNew',WebDav.OnAdminNew, methods=['POST'])
     self.App.add_url_rule('/admin/browse/<path:pPath>','AdminBrowse', WebDav.OnAdminBrowse, methods=['GET'])
+    self.App.add_url_rule('/admin/cert', 'Certificate',WebDav.OnAdminCert, methods=['GET'])
     self.App.add_url_rule('/<path:pPath>', 'Options',WebDav.OnOptions, methods=['OPTIONS'])
     self.App.add_url_rule('/<path:pPath>', 'Head',WebDav.OnHead, methods=['HEAD'])
     self.App.add_url_rule('/<path:pPath>', 'Get',WebDav.OnGet, methods=['GET'])
@@ -76,37 +84,47 @@ class WebDav(AsyncTask):
     self.App.add_url_rule('/<path:pPath>', 'PropGet',WebDav.OnPropGet, methods=['PROPFIND'])
     self.App.add_url_rule('/<path:pPath>', 'PropPut',WebDav.OnPropSet, methods=['PROPPATCH'])
 
-  def GenerateCerts():
-    from OpenSSL import crypto, SSL
-    k = crypto.PKey()
-    k.generate_key(crypto.TYPE_RSA, 4096)
-    cert = crypto.X509()
-    cert.get_subject().C = "US"
-    cert.get_subject().ST = "Texas"
-    cert.get_subject().L = "Plano"
-    cert.get_subject().O = "The Curious Geek"
-    # cert.get_subject().OU = "Tech"
-    cert.get_subject().CN = "Vault"
-    cert.add_extensions([crypto.X509Extension("subjectAltName".encode('utf-8'), False, "DNS: localhost".encode('utf-8'))])
-    cert.get_subject().emailAddress = 'owner@thecuriousgeek'
-    cert.set_serial_number(0)
-    cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(10 * 365 * 24 * 60 * 60)
-    cert.set_issuer(cert.get_subject())
-    cert.set_pubkey(k)
-    cert.sign(k, 'sha512')
-    with open('vault.crt', "wt") as f:
-      f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"))
-    with open('vault.key', "wt") as f:
-      f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("utf-8"))
-    return
-
+  def GenerateCerts(pNames:list[str]):
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    
+    _Key = rsa.generate_private_key(public_exponent=65537,key_size=2048,backend=default_backend(),)    
+    _Name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, pNames[0])])
+    _AltNames = [x509.DNSName(x) for x in pNames]
+    _SubAltNames = x509.SubjectAlternativeName(_AltNames)
+    _Constraints = x509.BasicConstraints(ca=True, path_length=0)
+    _Now = datetime.now(tz=timezone.utc)
+    _Cert = (
+      x509.CertificateBuilder()
+        .subject_name(_Name)
+        .issuer_name(_Name)
+        .public_key(_Key.public_key())
+        .serial_number(1000)
+        .not_valid_before(_Now)
+        .not_valid_after(_Now+timedelta(days=10*365))
+        .add_extension(_Constraints, False)
+        .add_extension(_SubAltNames, False)
+        .sign(_Key, hashes.SHA256(), default_backend())
+    )
+    _CertData = _Cert.public_bytes(encoding=serialization.Encoding.PEM)
+    _KeyData = _Key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return _CertData, _KeyData
+      
   async def OnAdminHome():
     _Response = '<html><head><title>My Vaults</title></head><body><h2>The following vaults are configured</h2><ul>'
     for _Vault in Config.Vaults():
       _Response += f'<li><a href="/admin/browse/{_Vault}">{_Vault}</a></li>'
     _Response += f'</ul><p>'
-    _Response += '<form action="/admin/new" method="POST">Name:<input name="name"> Password:<input name="password"><input type="submit" value="Create"></form>'
+    _Response += '<h2>Create New Vault</h2><form action="/admin/new" method="POST">Name:<input name="name"><br>Password:<input name="password"><br><input type="submit" value="Create"></form>'
+    _Response += '<p><h2>Certificate</h2><a href=/admin/cert>Download</a>'
     _Response += '</body></html>'
     return Response(_Response, 200,headers={})
 
@@ -120,6 +138,10 @@ class WebDav(AsyncTask):
 
   async def OnAdminBrowse(pPath:str):
     return Response('Files',200)
+
+  async def OnAdminCert():
+    c = f'{socket.gethostname()}.crt'
+    return send_file(open(c,'rb'),download_name=c, as_attachment=True, mimetype='application/x-x509-ca-cert')
 
   async def OnOptions(pPath:str):
     _Headers = {}
