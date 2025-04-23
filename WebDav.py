@@ -8,7 +8,7 @@ import socket
 from flask import Flask, Request, Response, request, redirect,send_file
 import mimetypes
 from Vault import Vault, Config
-from LibPython import Logger, AsyncTask, Dynamic
+from LibPython import Logger, Dynamic
 
 
 App = Flask('WebDAV')
@@ -16,7 +16,8 @@ def SanitizeXml(pWhat: str): return pWhat.replace( '&', '&amp;').replace('<', '&
 def FormatTime(pWhat: float): return datetime.fromtimestamp(pWhat, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S%z')
 def SplitURL(pURI: str) -> tuple:
   _Path = urllib.parse.unquote(urllib.parse.urlparse(pURI).path)
-  _Parts = _Path[1:].split('/', 1)
+  if _Path[0]=='/': _Path = _Path[1:]
+  _Parts = _Path.split('/', 1)
   return (_Parts[0] if len(_Parts) > 0 else None, f'/{_Parts[1]}' if len(_Parts) > 1 else '/')
 def GetRegexMatch(pPattern: str, pString: str):
   _Matches = re.search(pPattern, pString)
@@ -46,9 +47,9 @@ def AfterRequest(pResponse):
   return pResponse
 
 
-class WebDav(AsyncTask):
+class WebDav:
   Locks = []
-  async def Run(self):
+  def Run(self):
     _Name = socket.gethostname()
     if not os.path.exists(f'{_Name}.key') or not os.path.exists(f'{_Name}.crt'):
       _Names = [socket.gethostname(),socket.getfqdn()]
@@ -57,12 +58,16 @@ class WebDav(AsyncTask):
         f.write(c.decode('utf-8'))
       with open(f'{_Name}.key', "wt") as f:
         f.write(k.decode('utf-8'))
-    threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':443,'ssl_context': (f'{_Name}.crt', f'{_Name}.key')}).start()
-    threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':80}).start()
+    _Https = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':443,'ssl_context': (f'{_Name}.crt', f'{_Name}.key')})
+    _Http = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':80})
+    _Https.start()
+    _Http.start()
+    _Https.join()
+    _Http.join()
     # self.App.run(host='0.0.0.0', port=self.Port,ssl_context=(f'{_Name}.crt', f'{_Name}.key'))
 
   def __init__(self):
-    super().__init__('WebDav')
+    # super().__init__('WebDav')
     # log = logging.getLogger('werkzeug')
     # log.setLevel(logging.ERROR)
     self.App = App  # Global instance
@@ -137,7 +142,29 @@ class WebDav(AsyncTask):
     return redirect('/admin')
 
   async def OnAdminBrowse(pPath:str):
-    return Response('Files',200)
+    _Name,_Path = SplitURL(pPath)
+    if not _Name in Config.Vaults():
+      return Response(f'Vault {_Name}:Not Found', 404)
+    _Vault = Config.Open(_Name, request.Context.Password)
+    if not _Vault: return Response(None, 401, {'WWW-Authenticate': 'Basic realm="Vault"'})
+    if os.path.isfile(_Vault.GetFileName(_Path)):
+      from io import BytesIO
+      _Buff = BytesIO()
+      for d in _Vault.CopyFrom(_Path):
+        _Buff.write(d)
+      _Buff.seek(0)
+      return send_file(_Buff,download_name=os.path.basename(_Path), as_attachment=True, mimetype=mimetypes.guess_type(_Path)[0])
+    _Response = f'<html><head><title>Browse {_Vault.Name}</title></head><body><h2>Files in {_Path}</h2><ul>'
+    for _File in _Vault.ScanDir(_Path):
+      _Info = pathlib.Path(_Vault.GetFileName(_File))
+      _FileName = os.path.basename(_File)
+      _Response += f'<li><a href="/admin/browse/{_Vault.Name}/{os.path.join(_Path,_FileName)[1:]}">{SanitizeXml(_FileName)}</a>'
+      if _Info.is_dir():
+        _Response += f'</li>'
+      else:
+        _Response += f' - {_Info.stat().st_size}</li>'
+    _Response += '</ul><p>'
+    return Response(_Response,200)
 
   async def OnAdminCert():
     c = f'{socket.gethostname()}.crt'

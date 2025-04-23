@@ -14,4 +14,4 @@ if len(sys.argv) > 1 and os.path.isdir(sys.argv[1]):
   Vault.Root = sys.argv[1]
 os.chdir(Vault.Root)
 Config.Load()
-WebDav().Start(False)
+WebDav().Run()
