@@ -6,7 +6,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/Program.py",
-      "args": ["Z:/"],
+      "args": ["-f","Z:/","-h","localhost","-h","127.0.0.1"],
       "console": "integratedTerminal",
     }
   ]

@@ -51,13 +51,6 @@ class WebDav:
   Locks = []
   def Run(self):
     _Name = socket.gethostname()
-    if not os.path.exists(f'{_Name}.key') or not os.path.exists(f'{_Name}.crt'):
-      _Names = [socket.gethostname(),socket.getfqdn()]
-      c,k = WebDav.GenerateCerts(_Names)
-      with open(f'{_Name}.crt', "wt") as f:
-        f.write(c.decode('utf-8'))
-      with open(f'{_Name}.key', "wt") as f:
-        f.write(k.decode('utf-8'))
     _Https = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':443,'ssl_context': (f'{_Name}.crt', f'{_Name}.key')})
     _Http = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':80})
     _Https.start()
@@ -89,39 +82,6 @@ class WebDav:
     self.App.add_url_rule('/<path:pPath>', 'PropGet',WebDav.OnPropGet, methods=['PROPFIND'])
     self.App.add_url_rule('/<path:pPath>', 'PropPut',WebDav.OnPropSet, methods=['PROPPATCH'])
 
-  def GenerateCerts(pNames:list[str]):
-    from cryptography import x509
-    from cryptography.x509.oid import NameOID
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    
-    _Key = rsa.generate_private_key(public_exponent=65537,key_size=2048,backend=default_backend(),)    
-    _Name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, pNames[0])])
-    _AltNames = [x509.DNSName(x) for x in pNames]
-    _SubAltNames = x509.SubjectAlternativeName(_AltNames)
-    _Constraints = x509.BasicConstraints(ca=True, path_length=0)
-    _Now = datetime.now(tz=timezone.utc)
-    _Cert = (
-      x509.CertificateBuilder()
-        .subject_name(_Name)
-        .issuer_name(_Name)
-        .public_key(_Key.public_key())
-        .serial_number(1000)
-        .not_valid_before(_Now)
-        .not_valid_after(_Now+timedelta(days=10*365))
-        .add_extension(_Constraints, False)
-        .add_extension(_SubAltNames, False)
-        .sign(_Key, hashes.SHA256(), default_backend())
-    )
-    _CertData = _Cert.public_bytes(encoding=serialization.Encoding.PEM)
-    _KeyData = _Key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    return _CertData, _KeyData
       
   async def OnAdminHome():
     _Response = '<html><head><title>My Vaults</title></head><body><h2>The following vaults are configured</h2><ul>'
