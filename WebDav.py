@@ -213,7 +213,7 @@ class WebDav:
     _Body = request.data.decode('utf-8')
     _User = GetRegexMatch('<D:owner><D:href>(.*)</D:href></D:owner>', _Body)
     _Token = datetime.now().timestamp()
-    _Response = f'<?xml version="1.0" encoding="utf-8"?><D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock><D:locktype><D:write/></D:locktype><D:lockscope><D:exclusive/></D:lockscope><D:depth>infinity</D:depth><D:owner><D:href>{_User}</D:href></D:owner><D:timeout>Second-3600</D:timeout><D:locktoken><D:href>{_Token}</D:href></D:locktoken><D:lockroot><D:href>{WebDav.SanitizeXml(request.Context.Path)}</D:href></D:lockroot></D:activelock></D:lockdiscovery></D:prop>'
+    _Response = f'<?xml version="1.0" encoding="utf-8"?><D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock><D:locktype><D:write/></D:locktype><D:lockscope><D:exclusive/></D:lockscope><D:depth>infinity</D:depth><D:owner><D:href>{_User}</D:href></D:owner><D:timeout>Second-3600</D:timeout><D:locktoken><D:href>{_Token}</D:href></D:locktoken><D:lockroot><D:href>{SanitizeXml(request.Context.Path)}</D:href></D:lockroot></D:activelock></D:lockdiscovery></D:prop>'
     return Response(_Response, 200)
 
   async def OnUnlock(pPath:str):
@@ -259,9 +259,9 @@ class WebDav:
     _FileAttributes = GetRegexMatch('<Z:Win32FileAttributes>(.*)</Z:Win32FileAttributes>', _Body)
 
     # "application/xml; charset=utf-8"
-    _Response = f'<?xml version="1.0" encoding="UTF-8"?><D:multistatus xmlns:D="DAV:"><D:response><D:href>{WebDav.SanitizeXml(request.Context.Path)}</D:href><D:propstat><D:prop>'
+    _Response = f'<?xml version="1.0" encoding="UTF-8"?><D:multistatus xmlns:D="DAV:"><D:response><D:href>{SanitizeXml(request.Context.Path)}</D:href><D:propstat><D:prop>'
     _Patches = ''
-    _Info = pathlib.Path(request.Context.FileName)
+    _Info = pathlib.Path(request.Context.Vault.GetFileName(request.Context.Path))
     if (_Info.is_file):
       if _CreationTime:
         _Response += '<Win32CreationTime xmlns="urn:schemas-microsoft-com:"></Win32CreationTime>'
