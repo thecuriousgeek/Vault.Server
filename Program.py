@@ -3,6 +3,8 @@ import sys
 import logging
 import getopt
 import socket
+import ipaddress
+import re
 from datetime import datetime,timedelta,timezone
 from LibPython import Logger
 from WebDav import WebDav
@@ -20,8 +22,11 @@ def GenerateCerts(pName:str,pAliases:list[str]):
   from cryptography.hazmat.primitives.asymmetric import rsa
   
   _Key = rsa.generate_private_key(public_exponent=65537,key_size=2048,backend=default_backend(),)    
-  _Name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, pAliases[0])])
+  _Name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, pName)])
   _AltNames = [x509.DNSName(x) for x in pAliases]
+  for n in pAliases:
+    if re.match("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$",n):
+      _AltNames.append(x509.IPAddress(ipaddress.ip_address(n)))
   _SubAltNames = x509.SubjectAlternativeName(_AltNames)
   _Constraints = x509.BasicConstraints(ca=True, path_length=0)
   _Now = datetime.now(tz=timezone.utc)
