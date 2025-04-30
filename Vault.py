@@ -107,7 +107,7 @@ class Vault:
     _Folder = self.GetFileName(pPath)
     if os.path.isfile(_Folder): return pPath
     _Files = [x.path.replace('\\','/').replace('//','/') for x in os.scandir(_Folder)]
-    return [self.GetPath(x) for x in _Files if not x.endswith('/.vault')]
+    return sorted([self.GetPath(x) for x in _Files if not x.endswith('/.vault')])
   def Update(self,pPath:str,created=None,accessed=None,modified=None):
     _Info = pathlib.Path(self.GetFileName(pPath))
     _Modified = dateutil.parser.parse(modified).timestamp() if modified else _Info.stat().st_mtime
