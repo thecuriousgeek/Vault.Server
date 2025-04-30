@@ -13,7 +13,8 @@ from LibPython import Logger, Dynamic
 
 App = Flask('WebDAV')
 def SanitizeXml(pWhat: str): return pWhat.replace( '&', '&amp;').replace('<', '&lt;')
-def FormatTime(pWhat: float): return datetime.fromtimestamp(pWhat, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S%z')
+# def FormatTime(pWhat: float): return datetime.fromtimestamp(pWhat, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S%z')
+def FormatTime(pWhat: float): return datetime.fromtimestamp(pWhat, tz=timezone.utc).strftime('%a, %b %d %Y %H:%M:%S %Z')
 def SplitURL(pURI: str) -> tuple:
   _Path = urllib.parse.unquote(urllib.parse.urlparse(pURI).path)
   if _Path[0]=='/': _Path = _Path[1:]
@@ -113,7 +114,7 @@ class WebDav:
       for d in _Vault.CopyFrom(_Path):
         _Buff.write(d)
       _Buff.seek(0)
-      return send_file(_Buff,download_name=os.path.basename(_Path), as_attachment=True, mimetype=mimetypes.guess_type(_Path)[0])
+      return send_file(_Buff,download_name=os.path.basename(_Path), mimetype=mimetypes.guess_type(_Path)[0])
     _Response = f'<html><head><title>Browse {_Vault.Name}</title></head><body><h2>Files in {_Path}</h2><ul>'
     for _File in _Vault.ScanDir(_Path):
       _Info = pathlib.Path(_Vault.GetFileName(_File))
@@ -203,11 +204,11 @@ class WebDav:
         continue
       _Info = pathlib.Path(request.Context.Vault.GetFileName(_File))
       if _Info.is_dir():
-        _Response += f'<D:response><D:href>/{SanitizeXml(_File)}</D:href><D:propstat><D:prop><D:resourcetype><D:collection xmlns:D="DAV:"/></D:resourcetype><D:displayname>{SanitizeXml(os.path.basename(_File))}</D:displayname><D:getlastmodified>{FormatTime(_Info.stat().st_mtime)}</D:getlastmodified><D:supportedlock><D:lockentry xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>'
+        _Response += f'<D:response><D:href>/{request.Context.Vault.Name}{SanitizeXml(_File)}</D:href><D:propstat><D:prop><D:displayname>{SanitizeXml(os.path.basename(_File))}</D:displayname><D:resourcetype><D:collection xmlns:D="DAV:"/></D:resourcetype><D:getlastmodified>{FormatTime(_Info.stat().st_mtime)}</D:getlastmodified><D:supportedlock><D:lockentry xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>'
       else:
-        _Response += f'<D:response><D:href>/{SanitizeXml(_File)}</D:href><D:propstat><D:prop><D:resourcetype></D:resourcetype><D:displayname>{SanitizeXml(os.path.basename(_File))}</D:displayname><D:getcontentlength>{_Info.stat().st_size}</D:getcontentlength><D:creationdate>{FormatTime(_Info.stat().st_mtime)}</D:creationdate><D:getlastmodified>{FormatTime(_Info.stat().st_mtime)}</D:getlastmodified><D:supportedlock><D:lockentry xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>'
+        _Response += f'<D:response><D:href>/{request.Context.Vault.Name}{SanitizeXml(_File)}</D:href><D:propstat><D:prop><D:displayname>{SanitizeXml(os.path.basename(_File))}</D:displayname><D:resourcetype></D:resourcetype><D:getcontentlength>{_Info.stat().st_size}</D:getcontentlength><D:creationdate>{FormatTime(_Info.stat().st_mtime)}</D:creationdate><D:getlastmodified>{FormatTime(_Info.stat().st_mtime)}</D:getlastmodified><D:supportedlock><D:lockentry xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>'
     _Response += '</D:multistatus>'
-    return Response(_Response, 200, content_type='application/xml; charset=utf-8')
+    return Response(_Response, 207, content_type='text/xml; charset=utf-8')
 
   async def OnPropSet(pPath:str):
     if not request.Context.Vault.Exists(request.Context.Path):
