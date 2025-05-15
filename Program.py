@@ -7,7 +7,7 @@ import ipaddress
 import re
 from datetime import datetime,timedelta,timezone
 from LibPython import Logger
-from WebDav import WebDav
+from WebDav import WebDav,HOSTNAME
 from Vault import Vault,Config
 
 Logger.SetLevel(logging.INFO)
@@ -54,7 +54,6 @@ def GenerateCerts(pName:str,pAliases:list[str]):
     f.write(_KeyData.decode('utf-8'))
 
 _Aliases = [socket.gethostname(),socket.getfqdn()]
-_Name = socket.gethostname()
 opts,args = getopt.getopt(sys.argv[1:],'h:f:',['hostname','folder'])
 for opt,arg in opts:
   if opt=='-f': 
@@ -62,8 +61,8 @@ for opt,arg in opts:
     else: raise f'Folder {arg} not a vaild directory'
   if opt=='-h': _Aliases.append(arg)
 
-if not os.path.exists(f'{_Name}.key') or not os.path.exists(f'{_Name}.crt'):
+if not os.path.exists(f'{HOSTNAME}.key') or not os.path.exists(f'{HOSTNAME}.crt'):
   print('Generating certificates')
-  GenerateCerts(_Name,_Aliases)
+  GenerateCerts(HOSTNAME,_Aliases)
 Config.Load()
 WebDav().Run()

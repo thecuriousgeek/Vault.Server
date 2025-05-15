@@ -11,7 +11,29 @@ from Vault import Vault, Config
 from LibPython import Logger, Dynamic
 
 
+ICONS={
+  'FOLDER':'folder.jpg',
+  'FILE':'file.jpg',
+  '.JPG':'image.jpg',
+  '.PNG':'image.jpg',
+  '.GIF':'image.jpg',
+  '.JPEG':'image.jpg',
+  '.HEIC':'image.jpg',
+  '.MP3':'audio.jpg',
+  '.MP4':'video.jpg',
+  '.MOV':'video.jpg',
+  '.AVI':'video.jpg',
+  '.CBR':'book.jpg',
+  '.CBZ':'book.jpg',
+  '.EPUB':'book.jpg',
+  '.PDF':'book.jpg',
+  '.ZIP':'archive.jpg',
+  '.RAR':'archive.jpg',
+  '.7Z':'archive.jpg'
+}
 App = Flask('WebDAV')
+HOSTNAME=socket.gethostname()
+
 def SanitizeXml(pWhat: str): return pWhat.replace( '&', '&amp;').replace('<', '&lt;')
 # def FormatTime(pWhat: float): return datetime.fromtimestamp(pWhat, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S%z')
 def FormatTime(pWhat: float): return datetime.fromtimestamp(pWhat, tz=timezone.utc).strftime('%a, %b %d %Y %H:%M:%S %Z')
@@ -51,8 +73,7 @@ def AfterRequest(pResponse):
 class WebDav:
   Locks = []
   def Run(self):
-    _Name = socket.gethostname()
-    _Https = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':443,'ssl_context': (f'{_Name}.crt', f'{_Name}.key')})
+    _Https = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':443,'ssl_context': (f'{HOSTNAME}.crt', f'{HOSTNAME}.key')})
     _Http = threading.Thread(target=self.App.run, kwargs={'host':'0.0.0.0','port':80})
     _Https.start()
     _Http.start()
@@ -71,6 +92,7 @@ class WebDav:
     self.App.add_url_rule('/admin/new', 'AdminNew',WebDav.OnAdminNew, methods=['POST'])
     self.App.add_url_rule('/admin/browse/<path:pPath>','AdminBrowse', WebDav.OnAdminBrowse, methods=['GET'])
     self.App.add_url_rule('/admin/cert', 'Certificate',WebDav.OnAdminCert, methods=['GET'])
+    self.App.add_url_rule('/admin/<path:pPath>', 'AdminFile',WebDav.OnAdminFile, methods=['GET'])
     self.App.add_url_rule('/<path:pPath>', 'Options',WebDav.OnOptions, methods=['OPTIONS'])
     self.App.add_url_rule('/<path:pPath>', 'Head',WebDav.OnHead, methods=['HEAD'])
     self.App.add_url_rule('/<path:pPath>', 'Get',WebDav.OnGet, methods=['GET'])
@@ -90,7 +112,7 @@ class WebDav:
       _Response += f'<li><a href="/admin/browse/{_Vault}">{_Vault}</a></li>'
     _Response += f'</ul><p>'
     _Response += '<h2>Create New Vault</h2><form action="/admin/new" method="POST">Name:<input name="name"><br>Password:<input name="password"><br><input type="submit" value="Create"></form>'
-    _Response += '<p><h2>Certificate</h2><a href=/admin/cert>Download</a>'
+    _Response += f'<p><h2>Certificate</h2><a href=/admin/cert>Download</a>'
     _Response += '</body></html>'
     return Response(_Response, 200,headers={})
 
@@ -115,21 +137,31 @@ class WebDav:
         _Buff.write(d)
       _Buff.seek(0)
       return send_file(_Buff,download_name=os.path.basename(_Path), mimetype=mimetypes.guess_type(_Path)[0])
-    _Response = f'<html><head><title>Browse {_Vault.Name}</title></head><body><h2>Files in {_Path}</h2><ul>'
+    _Response = f'<html><head><title>Browse {_Vault.Name}</title><style>img{{height:1em;}}</style></head><body><h2>Files in {_Path}</h2><ul>'
     for _File in _Vault.ScanDir(_Path):
       _Info = pathlib.Path(_Vault.GetFileName(_File))
       _FileName = os.path.basename(_File)
-      _Response += f'<li><a href="/admin/browse/{_Vault.Name}/{os.path.join(_Path,_FileName)[1:]}">{SanitizeXml(_FileName)}</a>'
-      if _Info.is_dir():
-        _Response += f'</li>'
-      else:
-        _Response += f' - {_Info.stat().st_size}</li>'
+      _Icon = ICONS['FOLDER']
+      _Details = ''
+      if not _Info.is_dir():
+        _Ext = pathlib.Path(_FileName).suffix.upper()
+        _Icon = ICONS[_Ext] if _Ext in ICONS else ICONS['FILE']
+        _Size = _Info.stat().st_size
+        if _Size>1024*1024: _Size = f'{_Size/1024/1024:.2f}MB'
+        elif _Size>1024: _Size = f'{_Size/1024:.2f}KB'
+        else: _Size = f'{_Size}'
+        _Details = f' - {_Size}'
+      _Response += f'<li><img src=/admin/{_Icon}><a href="/admin/browse/{_Vault.Name}/{os.path.join(_Path,_FileName)[1:]}">{SanitizeXml(_FileName)}</a>{_Details}</li>'
     _Response += '</ul><p>'
     return Response(_Response,200)
 
   async def OnAdminCert():
     c = f'{socket.gethostname()}.crt'
     return send_file(open(c,'rb'),download_name=c, as_attachment=True, mimetype='application/x-x509-ca-cert')
+
+  async def OnAdminFile(pPath:str):
+    c = f'{pathlib.Path(__file__).parent}/assets/{pPath}'
+    return send_file(open(c,'rb'),download_name=c, as_attachment=True, mimetype=mimetypes.guess_type(pPath)[0])
 
   async def OnOptions(pPath:str):
     _Headers = {}
