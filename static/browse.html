@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WebDAV File Explorer</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    h2 { margin-bottom: 10px; }
+    #current-path, #current-vault { font-weight: bold; }
+    .controls {
+      margin-top: 10px;
+    }
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .file-item {
+      background: #fff;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+    }
+    .file-item:hover {
+      transform: scale(1.03);
+      cursor: pointer;
+    }
+    .file-icon {
+      font-size: 2em;
+      margin-bottom: 8px;
+    }
+    .file-name {
+      font-size: 0.9em;
+      word-break: break-word;
+    }
+    .actions {
+      margin-top: 10px;
+    }
+    .actions img {
+      width: 2em;
+      height: 2em;
+    }
+    .actions a, .actions button {
+      font-size: 0.75em;
+      margin: 1px;
+      text-decoration: none;
+      color: #007bff;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    .go-up {
+      margin-top: 10px;
+      display: inline-block;
+      font-size: 0.9em;
+      color: #333;
+      cursor: pointer;
+    }
+    input[type="file"] {
+      margin-right: 10px;
+    }
+    /* Modal */
+    #preview-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    #preview-box {
+      background: white;
+      max-width: 90vw;
+      max-height: 90vh;
+      padding: 20px;
+      overflow: auto;
+      position: relative;
+      border-radius: 10px;
+    }
+    #preview-box button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    iframe, video, audio, img {
+      max-width: 100%;
+      max-height: 80vh;
+      display: block;
+      margin: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>📁 WebDAV File Explorer</h2>
+  <div>Current Vault <span id="current-vault">/</span></div>
+  <div>Current Path: <span id="current-path">/</span>
+    <div class="go-up" id="go-up" style="display:none;" onclick="goUp()">⬆️ Go Up</div>
+  </div>
+  <div class="controls">
+    <input type="file" id="file-input" />
+    <button onclick="uploadFile()">Upload</button>
+  </div>  
+  <div class="file-grid" id="file-grid"></div>
+
+  <!-- Preview Modal -->
+  <div id="preview-modal">
+    <div id="preview-box">
+      <button onclick="closePreview()">X</button>
+      <div id="preview-content"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        closePreview();
+      }
+    });
+    let currentPath = '/';
+
+    function fetchFiles(pPath) {
+      _Folder = pPath;
+      document.getElementById('current-path').textContent = pPath;
+      document.getElementById('go-up').style.display = pPath !== '/' ? 'inline-block' : 'none';
+      fetch('/'+_Vault+_Folder, {
+        method: 'PROPFIND',
+        headers: { Depth: '1' }
+      })
+      .then(res => res.text())
+      .then(parseXML)
+      .then(renderFiles)
+      .catch(err => {
+        alert("Error loading directory");
+        console.error(err);
+      });
+    }
+
+    function parseXML(xmlText) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, 'application/xml');
+      const responses = Array.from(xml.getElementsByTagName('d:response'));
+
+      const items = responses.map(res => {
+        const href = decodeURIComponent(res.getElementsByTagName('d:href')[0].textContent).replace('//','/');
+        const isDir = res.getElementsByTagName('d:collection').length > 0;
+        const name = href.endsWith('/') ? href.split('/').slice(-2)[0] : href.split('/').pop();
+        const path = href.replace(/\/$/, '');
+        const contentType = res.getElementsByTagName('d:getcontenttype')[0]?.textContent || '';
+        const icon = isDir ? '📁' : '📄';
+
+        if (href === _Folder) return null;
+
+        return {
+          name,
+          path: path,
+          type: isDir ? 'folder' : 'file',
+          url: '/'+_Vault+path,
+          icon,
+          contentType
+        };
+      }).filter(Boolean);
+
+      return items;
+    }
+
+    function renderFiles(files) {
+      const grid = document.getElementById('file-grid');
+      grid.innerHTML = '';
+
+      files.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'file-item';
+
+        const icon = document.createElement('div');
+        icon.className = 'file-icon';
+        icon.textContent = item.icon;
+        icon.onclick = (e) => {
+          e.stopPropagation();
+          item.type === 'file' ? previewFile(item) : fetchFiles(item.path);
+        };
+
+        const name = document.createElement('div');
+        name.className = 'file-name';
+        name.textContent = item.name;
+
+        div.appendChild(icon);
+        div.appendChild(name);
+
+        if (item.type === 'file') {
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          actions.innerHTML = `
+            <button onclick="event.stopPropagation(); downloadFile('${item.path}', '${item.name}')"><img src="/static/download.jpg"></button>
+            <button onclick="event.stopPropagation(); deleteFile('${item.path}')"><img src="/static/delete.jpg"></button>
+            <button onclick="event.stopPropagation(); renameFile('${item.path}', '${item.name}')"><img src="/static/rename.jpg"></button>
+          `;
+          div.appendChild(actions);
+        }
+
+        grid.appendChild(div);
+      });
+    }
+
+    function goUp() {
+      const parts = currentPath.split('/').filter(Boolean);
+      parts.pop();
+      fetchFiles('/' + parts.join('/'));
+    }
+
+    function downloadFile(url, filename) {
+      fetch(url)
+        .then(res => res.blob())
+        .then(blob => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = filename;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        })
+        .catch(err => {
+          alert('Download failed');
+          console.error(err);
+        });
+    }
+    function uploadFile() {
+      const file = document.getElementById('file-input').files[0];
+      if (!file) return alert("Select a file");
+      fetch(baseURL + currentPath + '/' + file.name, {
+        method: 'PUT',
+        body: file
+      }).then(() => fetchFiles(currentPath));
+    }
+
+    function deleteFile(path) {
+      if (!confirm("Delete this file?")) return;
+      fetch(baseURL + path, { method: 'DELETE' })
+        .then(() => fetchFiles(currentPath));
+    }
+
+    function renameFile(path, oldName) {
+      const newName = prompt("Rename to:", oldName);
+      if (!newName || newName === oldName) return;
+      const newPath = path.split('/').slice(0, -1).join('/') + '/' + newName;
+      fetch(baseURL + path, {
+        method: 'MOVE',
+        headers: { Destination: baseURL + newPath }
+      }).then(() => fetchFiles(currentPath));
+    }
+
+    function previewFile(file) {
+      const modal = document.getElementById('preview-modal');
+      const content = document.getElementById('preview-content');
+      content.innerHTML = '';
+
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+        const img = document.createElement('img');
+        img.src = file.url;
+        content.appendChild(img);
+      } else if (['txt', 'log', 'md', 'csv', 'json'].includes(ext)) {
+        fetch(file.url).then(res => res.text()).then(text => {
+          const pre = document.createElement('pre');
+          pre.textContent = text;
+          pre.style.whiteSpace = 'pre-wrap';
+          content.appendChild(pre);
+        });
+      } else if (ext === 'pdf') {
+        const iframe = document.createElement('iframe');
+        iframe.src = file.url;
+        iframe.style.width = '100%';
+        iframe.style.height = '80vh';
+        content.appendChild(iframe);
+      } else if (['mp4', 'webm'].includes(ext)) {
+        const video = document.createElement('video');
+        video.controls = true;
+        video.src = file.url;
+        content.appendChild(video);
+      } else if (['mp3', 'wav'].includes(ext)) {
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = file.url;
+        content.appendChild(audio);
+      } else {
+        const fallback = document.createElement('div');
+        fallback.innerHTML = `<p>No preview available. <a href="${file.url}" target="_blank">Open or Download</a></p>`;
+        content.appendChild(fallback);
+      }
+
+      modal.style.display = 'flex';
+    }
+
+    function closePreview() {
+      document.getElementById('preview-modal').style.display = 'none';
+    }
+
+    // Initialize
+    const _Param = new URLSearchParams(window.location.search);
+    _Vault = _Param.get('path') || '';
+    document.getElementById('current-vault').textContent = _Vault;
+    fetchFiles('/');
+  </script>
+</body>
+</html>
