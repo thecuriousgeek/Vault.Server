@@ -84,7 +84,7 @@ def BeforeRequest():
 
 @App.after_request
 def AfterRequest(pResponse):
-  request.Context.Logger.Info(f'{pResponse.status_code} in {(datetime.now()-request.Context.Start).total_seconds()}s')
+  request.Context.Logger.Info(f'{pResponse.status_code} - {pResponse.content_length or "stream"} bytes in {(datetime.now()-request.Context.Start).total_seconds()}s')
   return pResponse
 
 
@@ -163,7 +163,7 @@ class Web:
     if request.method == 'GET': 
       return Dav.OnGet(_Vault,pPath)
     if request.method == 'PUT': 
-      return Dav.OnPut(_Vault,pPath,request.data)
+      return Dav.OnPut(_Vault,pPath)
     if request.method == 'DELETE': 
       return Dav.OnDelete(_Vault,pPath)
     if request.method == 'LOCK': 
@@ -177,5 +177,5 @@ class Web:
     if request.method == 'PROPFIND': 
       return Dav.OnPropFind(_Vault,pPath)
     if request.method == 'PROPPATCH': 
-      return Dav.OnPropPatch(_Vault,pPath,request.data)
+      return Dav.OnPropPatch(_Vault,pPath)
     # return Dav.OnVault(_Vault,pPath)

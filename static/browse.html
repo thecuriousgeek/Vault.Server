@@ -132,11 +132,11 @@
         closePreview();
       }
     });
-    let currentPath = '/';
 
     function fetchFiles(pPath) {
       _Folder = pPath;
-      document.getElementById('current-path').textContent = pPath;
+      currentPath = pPath;
+      document.getElementById('current-path').textContent = currentPath;
       document.getElementById('go-up').style.display = pPath !== '/' ? 'inline-block' : 'none';
       fetch('/'+_Vault+_Folder, {
         method: 'PROPFIND',
@@ -159,8 +159,8 @@
       const items = responses.map(res => {
         const href = decodeURIComponent(res.getElementsByTagName('d:href')[0].textContent).replace('//','/');
         const isDir = res.getElementsByTagName('d:collection').length > 0;
+        const path = '/'+href.replace(/\/$/, '').split('/').slice(2).join('/');
         const name = href.endsWith('/') ? href.split('/').slice(-2)[0] : href.split('/').pop();
-        const path = href.replace(/\/$/, '');
         const contentType = res.getElementsByTagName('d:getcontenttype')[0]?.textContent || '';
         const icon = isDir ? '📁' : '📄';
 
@@ -180,6 +180,7 @@
     }
 
     function renderFiles(files) {
+      files.shift(); // Remove the current folder entry
       const grid = document.getElementById('file-grid');
       grid.innerHTML = '';
 
@@ -244,7 +245,7 @@
     function uploadFile() {
       const file = document.getElementById('file-input').files[0];
       if (!file) return alert("Select a file");
-      fetch(baseURL + currentPath + '/' + file.name, {
+      fetch('/'+_Vault+currentPath + '/' + file.name, {
         method: 'PUT',
         body: file
       }).then(() => fetchFiles(currentPath));
@@ -252,7 +253,7 @@
 
     function deleteFile(path) {
       if (!confirm("Delete this file?")) return;
-      fetch(baseURL + path, { method: 'DELETE' })
+      fetch('/'+_Vault+ path, { method: 'DELETE' })
         .then(() => fetchFiles(currentPath));
     }
 
@@ -260,9 +261,9 @@
       const newName = prompt("Rename to:", oldName);
       if (!newName || newName === oldName) return;
       const newPath = path.split('/').slice(0, -1).join('/') + '/' + newName;
-      fetch(baseURL + path, {
+      fetch('/'+_Vault+ path, {
         method: 'MOVE',
-        headers: { Destination: baseURL + newPath }
+        headers: { Destination: '/'+_Vault + newPath }
       }).then(() => fetchFiles(currentPath));
     }
 
@@ -317,7 +318,8 @@
     const _Param = new URLSearchParams(window.location.search);
     _Vault = _Param.get('path') || '';
     document.getElementById('current-vault').textContent = _Vault;
-    fetchFiles('/');
+    let currentPath = '/';
+    fetchFiles(currentPath);
   </script>
 </body>
 </html>

@@ -48,19 +48,19 @@ class Vault:
   def EncryptPath(self,pPath:str)->str:
     if not self.CryptoName: return pPath
     _Result=[]
-    for p in pPath.replace('\\','/').split('/'):
+    for p in pPath.replace('\\','/').replace('//','/').split('/'):
       if p: _Result.append(self.CryptoName.Encrypt(p))
     return '/'+'/'.join(_Result) 
   def DecryptPath(self,pPath:str)->str:
     if not self.CryptoName: return pPath
     _Result=[]
-    for p in pPath.replace('\\','/').split('/'):
+    for p in pPath.replace('\\','/').replace('//','/').split('/'):
       if p: _Result.append(self.CryptoName.Decrypt(p))
     return '/'+'/'.join(_Result)    
   def GetFileName(self,pPath:str)->str:
-    return f'{self.Name}/{self.EncryptPath(pPath)}'.replace('\\','/')  
+    return f'{self.Name}/{self.EncryptPath(pPath)}'.replace('\\','/').replace('//','/')
   def GetPath(self,pFileName:str)->str:
-    return self.DecryptPath(pFileName[len(self.Name):]).replace('\\','/')  
+    return self.DecryptPath(pFileName[len(self.Name):]).replace('\\','/').replace('//','/')
   def IsHidden(self,pPath:str)->bool:
     return pPath=='/.vault'
   #endregion
@@ -103,11 +103,27 @@ class Vault:
   def Exists(self,pPath)->bool:
     if pPath=='/': return True
     return os.path.exists(self.GetFileName(pPath))
-  def ScanDir(self,pPath)->list:
+  def oScanDir(self,pPath)->list:
     _Folder = self.GetFileName(pPath)
     if os.path.isfile(_Folder): return pPath
-    _Files = [x.path.replace('\\','/').replace('//','/') for x in os.scandir(_Folder)]
+    _Files = [x.path.replace('\\','/').replace('//','/') for x in os.scandir(_Folder)] 
     return sorted([self.GetPath(x) for x in _Files if not x.endswith('/.vault')])
+  def ScanDir(self,pPath, pDepth):
+    _Result = ['/']
+    _Folder = self.GetFileName(pPath)
+    if os.path.isfile(_Folder): return pPath
+    if _Folder[-1]=='/': _Folder = _Folder[:-1] 
+    _Depth = _Folder.count('/') + pDepth
+    for r, d, f in os.walk(_Folder):
+      r = r.replace('\\','/').replace('//','/')
+      if r.count('/')>_Depth-1: break
+      for n in d:
+        _Result.append(r+'/'+n+'/')
+      for n in f:
+        fn=r+'/'+n
+        if fn.count('/')>_Depth: break
+        _Result.append(fn)
+    return sorted([self.GetPath(x).replace('\\','/').replace('//','/') for x in _Result if not x.endswith('/.vault')])
   def Update(self,pPath:str,created=None,accessed=None,modified=None):
     _Info = pathlib.Path(self.GetFileName(pPath))
     _Modified = dateutil.parser.parse(modified).timestamp() if modified else _Info.stat().st_mtime
