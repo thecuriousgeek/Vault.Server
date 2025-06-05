@@ -66,16 +66,19 @@ class Vault:
   #endregion
   #region Operations
   def CopyFrom(self,pPath:str):
-    if self.CryptoData:
-      with open(self.GetFileName(pPath),'rb') as _File:
-        for _Buff in  self.CryptoData.DecryptStream(_File):
-          yield _Buff
-    else:
-      with open(self.GetFileName(pPath),'rb') as _File:
-        while True:
-          _Buff = _File.read(1024)
-          if not _Buff: return
-          yield _Buff
+    try:
+      if self.CryptoData:
+        with open(self.GetFileName(pPath),'rb') as _File:
+          for _Buff in  self.CryptoData.DecryptStream(_File):
+            yield _Buff
+      else:
+        with open(self.GetFileName(pPath),'rb') as _File:
+          while True:
+            _Buff = _File.read(1024)
+            if not _Buff: return
+            yield _Buff
+    except:
+      pass
   def CopyTo(self,pPath:str,pStream):
     if self.CryptoData:
       with open(self.GetFileName(pPath),'wb') as _File:

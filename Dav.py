@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 import re
 import urllib.parse
 from flask import Response, request
-from LibPython import Xml
 import mimetypes
 from Vault import Vault, Config
 
@@ -75,8 +74,8 @@ class Dav:
     return Response('Created', 201)
 
   def OnPropFind(pVault:Vault,pPath:str):
+    if os.path.basename(pPath).startswith('.'): return NotFound(pVault.Name,pPath)  # Ignore hidden files, specially for mac metadata
     if not pVault.Exists(pPath): return NotFound(pVault.Name,pPath)
-    _Props = Xml(string=request.data) if request.data else None
     _Depth = int(request.headers.get('Depth', '0'))
     _Files = pVault.ScanDir(pPath,_Depth) if _Depth else [pPath]
     _Response = '<?xml version="1.0" encoding="UTF-8"?><d:multistatus xmlns:d="DAV:">'

@@ -2,7 +2,7 @@ import os
 import sys
 import getopt
 import logging
-from LibPython import Logger
+from LibPython import Logger,Xml
 import Web
 import Vault
 
